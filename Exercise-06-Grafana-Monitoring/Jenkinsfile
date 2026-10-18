@@ -1,5 +1,11 @@
+
 pipeline {
     agent any
+
+    environment {
+        PROJECT_DIR = 'Exercise-06-Grafana-Monitoring'
+        IMAGE_NAME = 'delivery-metrics'
+    }
 
     stages {
         stage('Pre-check Docker') {
@@ -11,18 +17,25 @@ pipeline {
 
         stage('Validate Files') {
             steps {
-                sh '''
-                    test -f delivery_metrics.py
-                    test -f prometheus.yml
-                    test -f alert_rules.yml
-                    test -f Dockerfile
-                '''
+                dir("${PROJECT_DIR}") {
+                    sh '''
+                        test -f delivery_metrics.py
+                        test -f prometheus.yml
+                        test -f alert_rules.yml
+                        test -f Dockerfile
+                        test -f requirements.txt
+                        test -f Jenkinsfile
+                        echo "All required files found."
+                    '''
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t delivery-metrics .'
+                dir("${PROJECT_DIR}") {
+                    sh 'docker build -t ${IMAGE_NAME} .'
+                }
             }
         }
 
@@ -31,21 +44,23 @@ pipeline {
                 sh '''
                     docker rm -f delivery-metrics 2>/dev/null || true
                     docker run -d --name delivery-metrics \
-                      -p 8000:8000 delivery-metrics
+                        -p 8001:8000 ${IMAGE_NAME}
                 '''
             }
         }
 
         stage('Run Prometheus') {
             steps {
-                sh '''
-                    docker rm -f prometheus 2>/dev/null || true
-                    docker run -d --name prometheus \
-                      -p 9090:9090 \
-                      -v "$WORKSPACE/prometheus.yml:/etc/prometheus/prometheus.yml" \
-                      -v "$WORKSPACE/alert_rules.yml:/etc/prometheus/alert_rules.yml" \
-                      prom/prometheus
-                '''
+                dir("${PROJECT_DIR}") {
+                    sh '''
+                        docker rm -f prometheus 2>/dev/null || true
+                        docker run -d --name prometheus \
+                            -p 9090:9090 \
+                            -v "$PWD/prometheus.yml:/etc/prometheus/prometheus.yml" \
+                            -v "$PWD/alert_rules.yml:/etc/prometheus/alert_rules.yml" \
+                            prom/prometheus
+                    '''
+                }
             }
         }
 
@@ -54,9 +69,18 @@ pipeline {
                 sh '''
                     docker rm -f grafana 2>/dev/null || true
                     docker run -d --name grafana \
-                      -p 3000:3000 grafana/grafana
+                        -p 3000:3000 grafana/grafana
                 '''
             }
+        }
+    }
+
+    post {
+        success {
+            echo 'Exercise 6 pipeline completed successfully.'
+        }
+        failure {
+            echo 'Pipeline failed. Check the console output.'
         }
     }
 }
