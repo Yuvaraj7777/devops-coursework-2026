@@ -1,0 +1,62 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Pre-check Docker') {
+            steps {
+                sh 'docker --version'
+                sh 'docker info'
+            }
+        }
+
+        stage('Validate Files') {
+            steps {
+                sh '''
+                    test -f delivery_metrics.py
+                    test -f prometheus.yml
+                    test -f alert_rules.yml
+                    test -f Dockerfile
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t delivery-metrics .'
+            }
+        }
+
+        stage('Run Application') {
+            steps {
+                sh '''
+                    docker rm -f delivery-metrics 2>/dev/null || true
+                    docker run -d --name delivery-metrics \
+                      -p 8000:8000 delivery-metrics
+                '''
+            }
+        }
+
+        stage('Run Prometheus') {
+            steps {
+                sh '''
+                    docker rm -f prometheus 2>/dev/null || true
+                    docker run -d --name prometheus \
+                      -p 9090:9090 \
+                      -v "$WORKSPACE/prometheus.yml:/etc/prometheus/prometheus.yml" \
+                      -v "$WORKSPACE/alert_rules.yml:/etc/prometheus/alert_rules.yml" \
+                      prom/prometheus
+                '''
+            }
+        }
+
+        stage('Run Grafana') {
+            steps {
+                sh '''
+                    docker rm -f grafana 2>/dev/null || true
+                    docker run -d --name grafana \
+                      -p 3000:3000 grafana/grafana
+                '''
+            }
+        }
+    }
+}
