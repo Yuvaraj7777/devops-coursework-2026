@@ -19,6 +19,7 @@ pipeline {
             steps {
                 dir("${PROJECT_DIR}") {
                     sh '''
+                        set -e
                         test -f delivery_metrics.py
                         test -f prometheus.yml
                         test -f alert_rules.yml
@@ -43,8 +44,10 @@ pipeline {
             steps {
                 sh '''
                     docker rm -f delivery-metrics 2>/dev/null || true
-                    docker run -d --name delivery-metrics \
-                        -p 8001:8000 ${IMAGE_NAME}
+                    docker run -d \
+                        --name delivery-metrics \
+                        -p 8001:8000 \
+                        ${IMAGE_NAME}
                 '''
             }
         }
@@ -53,12 +56,22 @@ pipeline {
             steps {
                 dir("${PROJECT_DIR}") {
                     sh '''
+                        set -e
+
                         docker rm -f prometheus 2>/dev/null || true
-                        docker run -d --name prometheus \
+
+                        docker create \
+                            --name prometheus \
                             -p 9090:9090 \
-                            -v "$PWD/prometheus.yml:/etc/prometheus/prometheus.yml" \
-                            -v "$PWD/alert_rules.yml:/etc/prometheus/alert_rules.yml" \
                             prom/prometheus
+
+                        docker cp prometheus.yml \
+                            prometheus:/etc/prometheus/prometheus.yml
+
+                        docker cp alert_rules.yml \
+                            prometheus:/etc/prometheus/alert_rules.yml
+
+                        docker start prometheus
                     '''
                 }
             }
@@ -68,8 +81,11 @@ pipeline {
             steps {
                 sh '''
                     docker rm -f grafana 2>/dev/null || true
-                    docker run -d --name grafana \
-                        -p 3000:3000 grafana/grafana
+
+                    docker run -d \
+                        --name grafana \
+                        -p 3000:3000 \
+                        grafana/grafana
                 '''
             }
         }
@@ -79,8 +95,13 @@ pipeline {
         success {
             echo 'Exercise 6 pipeline completed successfully.'
         }
+
         failure {
-            echo 'Pipeline failed. Check the console output.'
+            echo 'Pipeline failed. Check Console Output for the failing stage.'
+        }
+
+        always {
+            echo 'Exercise 6 Jenkins pipeline finished.'
         }
     }
 }
