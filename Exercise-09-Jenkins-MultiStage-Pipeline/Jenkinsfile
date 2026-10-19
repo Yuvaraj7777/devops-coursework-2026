@@ -1,8 +1,9 @@
+
 pipeline {
     agent any
 
     environment {
-        APP_DIR = 'python-flask-app'
+        APP_DIR = 'Exercise-09-Jenkins-MultiStage-Pipeline/python-flask-app'
         VENV = "${WORKSPACE}/.venv"
         DEPLOY_DIR = "${WORKSPACE}/python-app-deploy"
     }
@@ -46,17 +47,15 @@ pipeline {
             steps {
                 echo 'Starting Flask application...'
                 sh '''
-                    if [ -f "$DEPLOY_DIR/app.pid" ] &&
-                       kill -0 "$(cat "$DEPLOY_DIR/app.pid")" 2>/dev/null; then
-                        kill "$(cat "$DEPLOY_DIR/app.pid")" || true
-                    fi
+                    mkdir -p "$DEPLOY_DIR"
 
                     nohup "$VENV/bin/python" "$DEPLOY_DIR/app.py" \
                         > "$DEPLOY_DIR/app.log" 2>&1 &
                     echo $! > "$DEPLOY_DIR/app.pid"
 
                     for i in $(seq 1 20); do
-                        if curl --silent --fail http://127.0.0.1:5000/ \
+                        if curl --silent --fail \
+                            http://127.0.0.1:5000/ \
                             > "$DEPLOY_DIR/response.txt"; then
                             break
                         fi
@@ -78,7 +77,8 @@ pipeline {
 
                     echo "Application response: $RESPONSE"
 
-                    test "$RESPONSE" = "Hello, Jenkins Multi-Stage Pipeline!"
+                    test "$RESPONSE" = \
+                        "Hello, Jenkins Multi-Stage Pipeline!"
                 '''
             }
         }
